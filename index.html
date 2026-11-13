@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Wellness Challenge</title>
+<meta name="description" content="St. Mark Staff Wellness Challenge tracker">
+<meta name="theme-color" content="#1f5f4a">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Wellness">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="loading" class="screen center"><div class="spinner"></div></div>
+
+<!-- Sign in -->
+<div id="auth" class="screen center" hidden>
+  <div class="card auth-card">
+    <img src="icons/icon-192.png" alt="" class="logo">
+    <h1>St. Mark Staff<br>Wellness Challenge</h1>
+    <p class="muted">Sept 8, 2026 to April 30, 2027</p>
+
+    <form id="email-form">
+      <label for="email">Your email</label>
+      <input id="email" type="email" inputmode="email" autocomplete="email" autocapitalize="none" placeholder="you@example.com" required>
+      <button class="btn primary" type="submit">Email me a sign-in code</button>
+    </form>
+
+    <form id="code-form" hidden>
+      <p>We sent a code to <strong id="code-email"></strong>. Enter it below.</p>
+      <label for="code">Sign-in code</label>
+      <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]*" maxlength="10" placeholder="123456" required>
+      <button class="btn primary" type="submit">Sign in</button>
+      <button class="btn link" type="button" id="code-back">Use a different email</button>
+    </form>
+
+    <p id="auth-msg" class="msg" role="status"></p>
+    <p class="fine">Your log is private. Only you can see what you track.</p>
+  </div>
+</div>
+
+<!-- First-time setup -->
+<div id="onboard" class="screen center" hidden>
+  <form class="card auth-card" id="onboard-form">
+    <h1>Welcome!</h1>
+    <p class="muted">A few quick things and you're set. You get 5 points just for joining.</p>
+    <label for="ob-name">Your name</label>
+    <input id="ob-name" type="text" maxlength="60" autocomplete="name" required>
+    <label for="ob-goal">Your personal points goal</label>
+    <select id="ob-goal">
+      <option value="300">300 points (steady)</option>
+      <option value="500" selected>500 points (committed)</option>
+      <option value="750">750 points (ambitious)</option>
+      <option value="1000">1,000 points (all in)</option>
+    </select>
+    <label for="ob-carry">Points already earned on your spreadsheet <span class="muted">(optional)</span></label>
+    <input id="ob-carry" type="number" inputmode="numeric" min="0" max="5000" placeholder="0">
+    <p class="fine">Don't include the 5 points for joining. Those are added for you.</p>
+    <button class="btn primary" type="submit">Start tracking</button>
+    <p id="onboard-msg" class="msg" role="status"></p>
+  </form>
+</div>
+
+<!-- Main app -->
+<div id="main" class="screen" hidden>
+  <header class="top">
+    <div class="ring-wrap">
+      <svg viewBox="0 0 120 120" class="ring" aria-hidden="true">
+        <circle cx="60" cy="60" r="52" class="ring-bg"/>
+        <circle cx="60" cy="60" r="52" class="ring-fg" id="ring-fg"/>
+      </svg>
+      <div class="ring-label"><span id="pct">0</span><small>%</small></div>
+    </div>
+    <div class="top-text">
+      <div class="hello" id="hello"></div>
+      <div class="total"><span id="total">0</span> <small>of <span id="goal">500</span> points</small></div>
+      <div class="next" id="next"></div>
+    </div>
+  </header>
+
+  <main>
+    <!-- Log tab -->
+    <section id="tab-log" class="tab">
+      <div class="datebar">
+        <button class="iconbtn" id="date-prev" aria-label="Previous day">&#8249;</button>
+        <label class="datepick">
+          <span id="date-label">Today</span>
+          <input type="date" id="date-input" aria-label="Choose date">
+        </label>
+        <button class="iconbtn" id="date-next" aria-label="Next day">&#8250;</button>
+      </div>
+      <nav class="chips" id="chips" aria-label="Categories"></nav>
+      <div id="challenge-list" class="list"></div>
+    </section>
+
+    <!-- Progress tab -->
+    <section id="tab-progress" class="tab" hidden>
+      <h2>Milestones</h2>
+      <div id="milestones" class="milestones"></div>
+      <h2>Points by category</h2>
+      <div id="breakdown" class="card pad"></div>
+      <h2>Recent activity</h2>
+      <div id="history" class="card"></div>
+    </section>
+
+    <!-- Me tab -->
+    <section id="tab-me" class="tab" hidden>
+      <h2>My settings</h2>
+      <form id="settings-form" class="card pad">
+        <label for="st-name">Name</label>
+        <input id="st-name" type="text" maxlength="60" required>
+        <label for="st-goal">Personal points goal</label>
+        <input id="st-goal" type="number" inputmode="numeric" min="50" max="5000" step="10" required>
+        <label for="st-carry">Points carried over from spreadsheet</label>
+        <input id="st-carry" type="number" inputmode="numeric" min="0" max="5000" required>
+        <button class="btn primary" type="submit">Save</button>
+        <p id="settings-msg" class="msg" role="status"></p>
+      </form>
+
+      <h2>Put this app on your phone</h2>
+      <div class="card pad" id="install-card">
+        <button class="btn primary" id="install-btn" hidden>Install app</button>
+        <p><strong>iPhone:</strong> open this page in Safari, tap the Share button, then <em>Add to Home Screen</em>.</p>
+        <p><strong>Android:</strong> open this page in Chrome, tap the &#8942; menu, then <em>Add to Home screen</em> or <em>Install app</em>.</p>
+      </div>
+
+      <div class="card pad">
+        <p class="muted" id="signed-in-as"></p>
+        <button class="btn" id="signout">Sign out</button>
+      </div>
+      <p class="fine center-text">Your log is private. Only you can see what you track.</p>
+    </section>
+  </main>
+
+  <nav class="tabbar" aria-label="Sections">
+    <button data-tab="log" class="active"><span class="ti">&#10003;</span>Log</button>
+    <button data-tab="progress"><span class="ti">&#9733;</span>Progress</button>
+    <button data-tab="me"><span class="ti">&#9787;</span>Me</button>
+  </nav>
+</div>
+
+<div id="toast" class="toast" role="status" hidden></div>
+
+<!-- Celebration -->
+<div id="celebrate" class="celebrate" hidden>
+  <canvas id="confetti"></canvas>
+  <div class="card celebrate-card">
+    <div class="big" id="cel-emoji">🎉</div>
+    <h1 id="cel-title"></h1>
+    <p id="cel-body"></p>
+    <button class="btn primary" id="cel-close">Keep going</button>
+  </div>
+</div>
+
+<script src="vendor/supabase.js"></script>
+<script src="challenges.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
