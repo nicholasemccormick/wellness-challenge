@@ -1,5 +1,5 @@
 // Network-first so updates show up right away; cached copy is the offline fallback.
-const CACHE = 'wellness-v1';
+const CACHE = 'wellness-v2';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'challenges.js', 'vendor/supabase.js', 'manifest.webmanifest', 'icons/icon-192.png'];
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));

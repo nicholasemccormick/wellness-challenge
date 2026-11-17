@@ -74,7 +74,7 @@ main { flex: 1; padding: .75rem .85rem calc(5.5rem + env(safe-area-inset-bottom)
 .iconbtn { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--card); font-size: 1.5rem; color: var(--green); cursor: pointer; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
 .iconbtn:disabled { opacity: .3; }
 .datepick { position: relative; flex: 1; margin: 0; text-align: center; background: var(--card); border-radius: 22px; padding: .65rem; font-size: 1rem; font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
-.datepick input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; padding: 0; border: 0; }
+
 
 .chips { display: flex; gap: .4rem; overflow-x: auto; padding: .2rem 0 .7rem; scrollbar-width: none; }
 .chips::-webkit-scrollbar { display: none; }
@@ -94,7 +94,9 @@ main { flex: 1; padding: .75rem .85rem calc(5.5rem + env(safe-area-inset-bottom)
 .round { width: 42px; height: 42px; border-radius: 50%; border: 1.5px solid var(--green); background: #fff; color: var(--green); font-size: 1.4rem; font-weight: 600; line-height: 1; cursor: pointer; }
 .round.add { background: var(--green); color: #fff; }
 .round:disabled { opacity: .3; }
-.count { min-width: 1.4rem; text-align: center; font-weight: 700; }
+input.count { width: 3rem; padding: .45rem .1rem; text-align: center; font-weight: 700; font-size: 1.05rem; border-radius: 10px; -moz-appearance: textfield; appearance: textfield; }
+input.count::-webkit-outer-spin-button, input.count::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.round { width: 38px; height: 38px; }
 .check { flex: none; width: 46px; height: 46px; border-radius: 50%; border: 2px solid var(--green); background: #fff; color: transparent; font-size: 1.4rem; cursor: pointer; }
 .check.on { background: var(--green); color: #fff; }
 .check:disabled { opacity: .6; }
@@ -115,6 +117,9 @@ main { flex: 1; padding: .75rem .85rem calc(5.5rem + env(safe-area-inset-bottom)
 .hrow { display: flex; align-items: center; gap: .6rem; padding: .65rem .85rem; border-bottom: 1px solid var(--line); font-size: .9rem; }
 .hrow:last-child { border-bottom: 0; }
 .hrow .d { flex: none; width: 3.4rem; color: var(--muted); font-size: .78rem; }
+.btn.danger { color: var(--danger); border-color: #e6c4bd; }
+.btn.danger.armed { background: var(--danger); border-color: var(--danger); color: #fff; }
+#month-hint { margin: 0 0 .5rem; }
 .hrow .x { flex: 1; min-width: 0; }
 .hrow .v { flex: none; font-weight: 700; color: var(--green); }
 .hrow button { flex: none; border: 0; background: none; color: var(--muted); font-size: 1.1rem; padding: .3rem .4rem; cursor: pointer; }

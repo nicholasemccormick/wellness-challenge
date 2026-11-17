@@ -6,6 +6,8 @@
 <title>Wellness Challenge</title>
 <meta name="description" content="St. Mark Staff Wellness Challenge tracker">
 <meta name="theme-color" content="#1f5f4a">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; manifest-src 'self'; worker-src 'self'; connect-src 'self' https://ledntmcewofaenihreon.supabase.co; base-uri 'none'; form-action 'none'">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
@@ -41,7 +43,7 @@
     </form>
 
     <p id="auth-msg" class="msg" role="status"></p>
-    <p class="fine">Your log is private. Only you can see what you track.</p>
+    <p class="fine">Your log is private. Other staff cannot see what you track.</p>
   </div>
 </div>
 
@@ -88,13 +90,11 @@
     <!-- Log tab -->
     <section id="tab-log" class="tab">
       <div class="datebar">
-        <button class="iconbtn" id="date-prev" aria-label="Previous day">&#8249;</button>
-        <label class="datepick">
-          <span id="date-label">Today</span>
-          <input type="date" id="date-input" aria-label="Choose date">
-        </label>
-        <button class="iconbtn" id="date-next" aria-label="Next day">&#8250;</button>
+        <button class="iconbtn" id="month-prev" aria-label="Previous month">&#8249;</button>
+        <div class="datepick" id="month-label" aria-live="polite"></div>
+        <button class="iconbtn" id="month-next" aria-label="Next month">&#8250;</button>
       </div>
+      <p class="fine center-text" id="month-hint">Enter how many times you did each one this month.</p>
       <nav class="chips" id="chips" aria-label="Categories"></nav>
       <div id="challenge-list" class="list"></div>
     </section>
@@ -105,7 +105,7 @@
       <div id="milestones" class="milestones"></div>
       <h2>Points by category</h2>
       <div id="breakdown" class="card pad"></div>
-      <h2>Recent activity</h2>
+      <h2>Points by month</h2>
       <div id="history" class="card"></div>
     </section>
 
@@ -134,7 +134,14 @@
         <p class="muted" id="signed-in-as"></p>
         <button class="btn" id="signout">Sign out</button>
       </div>
-      <p class="fine center-text">Your log is private. Only you can see what you track.</p>
+
+      <h2>Your privacy</h2>
+      <div class="card pad">
+        <p>Your log is private. Other staff and your admin team cannot see what you track or how many points you have.</p>
+        <p class="fine">The app stores your email, the name you entered, your goal, and a monthly count for each challenge. It does not store dates, notes, or anything else. Everything travels over an encrypted connection, and each account can only read its own records.</p>
+        <button class="btn danger" id="delete-account" type="button">Delete my account and data</button>
+        <p id="delete-msg" class="msg" role="status"></p>
+      </div>
     </section>
   </main>
 

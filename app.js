@@ -10,7 +10,8 @@
   var sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
   var $ = function (id) { return document.getElementById(id); };
 
-  var state = { user: null, profile: null, entries: [], date: null, cat: 'physical', busy: false };
+  // counts: { 'YYYY-MM-01': { challenge_id: n } }  One number per challenge per month, nothing finer.
+  var state = { user: null, profile: null, counts: {}, month: null, cat: C.categories[0].id, busy: false };
   var PENDING_KEY = 'wellness.pendingEmail';
   var MS_INFO = {
     10: { e: '🌱', t: 'Off to a great start!', b: "You're 10% of the way to your goal. The hardest part is beginning, and you've done it." },
@@ -22,67 +23,64 @@
 
   // ---------- helpers ----------
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
-  function iso(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
   function parse(s) { var p = s.split('-'); return new Date(+p[0], +p[1] - 1, +p[2]); }
-  function todayIso() { return iso(new Date()); }
-  function maxDate() { var t = todayIso(); return t > C.end ? C.end : (t < C.start ? C.start : t); }
-  function clampDate(s) { if (s < C.start) return C.start; var m = maxDate(); return s > m ? m : s; }
-  function addDays(s, n) { var d = parse(s); d.setDate(d.getDate() + n); return iso(d); }
-  function fmtDate(s, short) {
-    return parse(s).toLocaleDateString(undefined, short ? { month: 'short', day: 'numeric' } : { weekday: 'short', month: 'short', day: 'numeric' });
+  function monthKey(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-01'; }
+  var FIRST = C.start.slice(0, 8) + '01', LAST = C.end.slice(0, 8) + '01';
+  function currentMonth() { var m = monthKey(new Date()); return m < FIRST ? FIRST : (m > LAST ? LAST : m); }
+  function shiftMonth(m, n) { var d = parse(m); d.setMonth(d.getMonth() + n); return monthKey(d); }
+  function clampMonth(m) { if (m < FIRST) return FIRST; var c = currentMonth(); return m > c ? c : m; }
+  function months() { var out = [], m = FIRST, c = currentMonth(); while (m <= c) { out.push(m); m = shiftMonth(m, 1); } return out; }
+  function monthName(m, withYear) { return parse(m).toLocaleDateString(undefined, withYear ? { month: 'long', year: 'numeric' } : { month: 'long' }); }
+  // Days of the challenge that fall inside a month (September starts on the 8th).
+  function daysIn(m) {
+    var d = parse(m), last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    var from = m === FIRST ? +C.start.slice(8) : 1, to = m === LAST ? +C.end.slice(8) : last;
+    return to - from + 1;
   }
-  function monthName(s) { return parse(s).toLocaleDateString(undefined, { month: 'long' }); }
+  function maxFor(it, m) { return it.daily ? daysIn(m) : (it.maxPerMonth || 99); }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
-  function show(id) {
-    ['loading', 'auth', 'onboard', 'main'].forEach(function (s) { $(s).hidden = s !== id; });
-  }
+  function show(id) { ['loading', 'auth', 'onboard', 'main'].forEach(function (s) { $(s).hidden = s !== id; }); }
   var toastTimer;
   function toast(msg) {
     var t = $('toast'); t.textContent = msg; t.hidden = false;
     clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.hidden = true; }, 2600);
   }
   function setMsg(id, msg, ok) { var m = $(id); m.textContent = msg || ''; m.classList.toggle('ok', !!ok); }
+  function plural(n, w) { return n + ' ' + w + (n === 1 ? '' : 's'); }
 
-  function total() {
-    var sum = state.profile ? state.profile.carryover_points : 0;
-    state.entries.forEach(function (e) { sum += e.points; });
+  function getCount(id, m) { return (state.counts[m] && state.counts[m][id]) || 0; }
+  function countAll(id) { var n = 0; Object.keys(state.counts).forEach(function (m) { n += state.counts[m][id] || 0; }); return n; }
+  function monthPoints(m) {
+    var sum = 0, row = state.counts[m] || {};
+    Object.keys(row).forEach(function (id) { if (ITEMS[id]) sum += row[id] * ITEMS[id].pts; });
     return sum;
   }
-  function countOn(id, date) {
-    return state.entries.filter(function (e) { return e.challenge_id === id && e.entry_date === date; }).length;
-  }
-  function countAll(id) {
-    return state.entries.filter(function (e) { return e.challenge_id === id; }).length;
-  }
-  function inMonth(id, date) {
-    var ym = date.slice(0, 7);
-    return state.entries.filter(function (e) { return e.challenge_id === id && e.entry_date.slice(0, 7) === ym; });
+  function total() {
+    var sum = state.profile ? state.profile.carryover_points : 0;
+    Object.keys(state.counts).forEach(function (m) { sum += monthPoints(m); });
+    return sum;
   }
 
   // ---------- data ----------
-  async function loadEntries() {
-    var all = [], from = 0, size = 1000;
-    for (;;) {
-      var r = await sb.from('entries').select('id,challenge_id,points,entry_date,created_at')
-        .order('id', { ascending: true }).range(from, from + size - 1);
-      if (r.error) throw r.error;
-      all = all.concat(r.data);
-      if (r.data.length < size) break;
-      from += size;
-    }
-    state.entries = all;
-  }
-
-  async function addEntry(item, date) {
-    var r = await sb.from('entries').insert({ challenge_id: item.id, points: item.pts, entry_date: date })
-      .select('id,challenge_id,points,entry_date,created_at').single();
+  async function loadCounts() {
+    var r = await sb.from('monthly_counts').select('month,challenge_id,count');
     if (r.error) throw r.error;
-    state.entries.push(r.data);
+    state.counts = {};
+    r.data.forEach(function (row) { (state.counts[row.month] = state.counts[row.month] || {})[row.challenge_id] = row.count; });
   }
-  async function removeEntry(id) {
-    var r = await sb.from('entries').delete().eq('id', id);
+  async function setCount(item, m, n) {
+    n = Math.max(0, Math.min(maxFor(item, m), Math.floor(n) || 0));
+    var r;
+    if (n === 0) r = await sb.from('monthly_counts').delete().eq('user_id', state.user.id).eq('month', m).eq('challenge_id', item.id);
+    else r = await sb.from('monthly_counts').upsert({ user_id: state.user.id, month: m, challenge_id: item.id, count: n }, { onConflict: 'user_id,month,challenge_id' });
     if (r.error) throw r.error;
-    state.entries = state.entries.filter(function (e) { return e.id !== id; });
+    state.counts[m] = state.counts[m] || {};
+    if (n === 0) delete state.counts[m][item.id]; else state.counts[m][item.id] = n;
+  }
+  async function clearAll(item) {
+    var r = await sb.from('monthly_counts').delete().eq('user_id', state.user.id).eq('challenge_id', item.id);
+    if (r.error) throw r.error;
+    Object.keys(state.counts).forEach(function (m) { delete state.counts[m][item.id]; });
   }
 
   async function act(fn) {
@@ -150,19 +148,20 @@
     $('ring-fg').style.strokeDashoffset = (326.73 * (1 - Math.min(pct, 100) / 100)).toFixed(2);
     var nextM = C.milestones.filter(function (m) { return pct < m; })[0];
     $('next').textContent = nextM
-      ? (function (n) { return n + (n === 1 ? ' point' : ' points') + ' to your ' + nextM + '% milestone'; })(Math.max(1, Math.ceil(p.goal_points * nextM / 100 - tot)))
+      ? plural(Math.max(1, Math.ceil(p.goal_points * nextM / 100 - tot)), 'point') + ' to your ' + nextM + '% milestone'
       : 'Goal reached. Everything from here is a bonus!';
-
     renderLog();
     renderProgress();
   }
 
   function renderLog() {
-    var d = state.date, t = todayIso();
-    $('date-label').textContent = d === t ? 'Today, ' + fmtDate(d, true) : (d === addDays(t, -1) ? 'Yesterday, ' + fmtDate(d, true) : fmtDate(d));
-    var di = $('date-input'); di.min = C.start; di.max = maxDate(); di.value = d;
-    $('date-prev').disabled = d <= C.start;
-    $('date-next').disabled = d >= maxDate();
+    var m = state.month;
+    $('month-label').textContent = monthName(m, true);
+    $('month-prev').disabled = m <= FIRST;
+    $('month-next').disabled = m >= currentMonth();
+    $('month-hint').textContent = state.cat === 'onetime' ? 'Check each one off once you have done it.'
+      : state.cat === 'monthly' ? 'Check off what you completed in ' + monthName(m) + '.'
+      : 'Enter how many times you did each one in ' + monthName(m) + '.';
 
     var chips = $('chips'); chips.textContent = '';
     C.categories.forEach(function (c) {
@@ -173,12 +172,10 @@
     });
 
     var list = $('challenge-list'); list.textContent = '';
-    C.items.filter(function (it) { return it.cat === state.cat; }).forEach(function (it) {
-      list.appendChild(itemRow(it, d));
-    });
+    C.items.filter(function (it) { return it.cat === state.cat; }).forEach(function (it) { list.appendChild(itemRow(it, m)); });
   }
 
-  function itemRow(it, d) {
+  function itemRow(it, m) {
     var row = el('div', 'item');
     var pts = el('div', 'pts'); pts.appendChild(document.createTextNode(it.pts)); pts.appendChild(el('small', null, 'pts'));
     var txt = el('div', 'item-text'); txt.appendChild(el('div', 't', it.text));
@@ -186,43 +183,51 @@
     row.appendChild(pts); row.appendChild(txt);
 
     if (it.mode === 'repeat') {
-      var n = countOn(it.id, d), all = countAll(it.id), max = it.maxPerDay || 10;
-      sub.textContent = all ? all + ' time' + (all === 1 ? '' : 's') + ' so far, ' + all * it.pts + ' points' : it.pts + ' point' + (it.pts === 1 ? '' : 's') + ' each time';
+      var n = getCount(it.id, m), all = countAll(it.id), max = maxFor(it, m);
+      sub.textContent = all ? plural(all, 'time') + ' overall, ' + plural(all * it.pts, 'point') : plural(it.pts, 'point') + ' each time';
       if (n) row.classList.add('done');
       var st = el('div', 'stepper');
       var minus = el('button', 'round', '−'); minus.type = 'button'; minus.disabled = n === 0;
-      minus.setAttribute('aria-label', 'Remove one: ' + it.text);
-      minus.addEventListener('click', function () {
-        act(async function () {
-          var mine = state.entries.filter(function (e) { return e.challenge_id === it.id && e.entry_date === d; });
-          if (mine.length) await removeEntry(mine[mine.length - 1].id);
-        });
-      });
-      var cnt = el('span', 'count', n);
+      minus.setAttribute('aria-label', 'One fewer: ' + it.text);
+      minus.addEventListener('click', function () { act(function () { return setCount(it, m, getCount(it.id, m) - 1); }); });
+      var cnt = el('input', 'count'); cnt.type = 'number'; cnt.inputMode = 'numeric'; cnt.min = 0; cnt.max = max; cnt.value = n;
+      cnt.setAttribute('aria-label', 'Times in ' + monthName(m) + ': ' + it.text);
+      cnt.addEventListener('focus', function () { cnt.select(); });
+      cnt.addEventListener('change', function () { act(function () { return setCount(it, m, parseInt(cnt.value, 10)); }); });
       var plus = el('button', 'round add', '+'); plus.type = 'button'; plus.disabled = n >= max;
-      plus.setAttribute('aria-label', 'Add one: ' + it.text);
-      plus.addEventListener('click', function () { act(function () { return addEntry(it, d); }); });
+      plus.setAttribute('aria-label', 'One more: ' + it.text);
+      plus.addEventListener('click', function () { act(function () { return setCount(it, m, getCount(it.id, m) + 1); }); });
       st.appendChild(minus); st.appendChild(cnt); st.appendChild(plus);
       row.appendChild(st);
     } else {
-      var existing = it.mode === 'monthly' ? inMonth(it.id, d) : state.entries.filter(function (e) { return e.challenge_id === it.id; });
-      var on = existing.length > 0;
-      if (it.mode === 'monthly') sub.textContent = on ? 'Done for ' + monthName(d) : 'Tap when completed for ' + monthName(d);
-      else sub.textContent = on ? 'Done on ' + fmtDate(existing[0].entry_date, true) : 'One time only';
+      var on = it.mode === 'monthly' ? getCount(it.id, m) > 0 : countAll(it.id) > 0;
+      if (it.mode === 'monthly') sub.textContent = on ? 'Done for ' + monthName(m) : 'Tap when completed for ' + monthName(m);
+      else sub.textContent = on ? 'Done' : 'One time only';
       if (on) row.classList.add('done');
       var chk = el('button', 'check' + (on ? ' on' : ''), '✓'); chk.type = 'button';
       chk.setAttribute('aria-pressed', on ? 'true' : 'false');
       chk.setAttribute('aria-label', it.text);
       if (it.auto) chk.disabled = true;
       chk.addEventListener('click', function () {
-        act(async function () {
-          if (on) { for (var i = 0; i < existing.length; i++) await removeEntry(existing[i].id); }
-          else await addEntry(it, d);
+        act(function () {
+          if (!on) return setCount(it, m, 1);
+          return it.mode === 'monthly' ? setCount(it, m, 0) : clearAll(it);
         });
       });
       row.appendChild(chk);
     }
     return row;
+  }
+
+  function bars(container, rows) {
+    var maxV = Math.max.apply(null, rows.map(function (r) { return r.v; }).concat([1]));
+    container.textContent = '';
+    rows.forEach(function (r) {
+      var row = el('div', 'bar-row'), lbl = el('div', 'lbl');
+      lbl.appendChild(el('span', null, r.name)); lbl.appendChild(el('span', null, r.v));
+      var bar = el('div', 'bar'), fill = el('i'); fill.style.width = (r.v / maxV * 100) + '%'; bar.appendChild(fill);
+      row.appendChild(lbl); row.appendChild(bar); container.appendChild(row);
+    });
   }
 
   function renderProgress() {
@@ -237,36 +242,17 @@
     });
 
     var sums = {}; C.categories.forEach(function (c) { sums[c.id] = 0; });
-    state.entries.forEach(function (e) { var it = ITEMS[e.challenge_id]; if (it) sums[it.cat] += e.points; });
+    Object.keys(state.counts).forEach(function (m) {
+      Object.keys(state.counts[m]).forEach(function (id) { var it = ITEMS[id]; if (it) sums[it.cat] += state.counts[m][id] * it.pts; });
+    });
     var rows = C.categories.map(function (c) { return { name: c.name, v: sums[c.id] }; });
     if (p.carryover_points) rows.push({ name: 'Carried over from spreadsheet', v: p.carryover_points });
-    var maxV = Math.max.apply(null, rows.map(function (r) { return r.v; }).concat([1]));
-    var bd = $('breakdown'); bd.textContent = '';
-    rows.forEach(function (r) {
-      var row = el('div', 'bar-row'), lbl = el('div', 'lbl');
-      lbl.appendChild(el('span', null, r.name)); lbl.appendChild(el('span', null, r.v));
-      var bar = el('div', 'bar'), fill = el('i'); fill.style.width = (r.v / maxV * 100) + '%'; bar.appendChild(fill);
-      row.appendChild(lbl); row.appendChild(bar); bd.appendChild(row);
-    });
+    bars($('breakdown'), rows);
 
     var h = $('history'); h.textContent = '';
-    var recent = state.entries.slice().sort(function (a, b) {
-      return a.entry_date === b.entry_date ? b.id - a.id : (a.entry_date < b.entry_date ? 1 : -1);
-    }).slice(0, 40);
-    if (!recent.length) { h.appendChild(el('div', 'empty', 'Nothing logged yet. Head to the Log tab to get started.')); return; }
-    recent.forEach(function (e) {
-      var it = ITEMS[e.challenge_id];
-      var row = el('div', 'hrow');
-      row.appendChild(el('div', 'd', fmtDate(e.entry_date, true)));
-      row.appendChild(el('div', 'x', it ? it.text : e.challenge_id));
-      row.appendChild(el('div', 'v', '+' + e.points));
-      if (!(it && it.auto)) {
-        var del = el('button', null, '✕'); del.type = 'button'; del.setAttribute('aria-label', 'Remove this entry');
-        del.addEventListener('click', function () { act(function () { return removeEntry(e.id); }); });
-        row.appendChild(del);
-      }
-      h.appendChild(row);
-    });
+    var wrap = el('div', 'pad'); wrap.style.padding = '1rem';
+    bars(wrap, months().map(function (m) { return { name: monthName(m, true), v: monthPoints(m) }; }));
+    h.appendChild(wrap);
   }
 
   // ---------- navigation ----------
@@ -277,9 +263,8 @@
       window.scrollTo(0, 0);
     });
   });
-  $('date-prev').addEventListener('click', function () { state.date = clampDate(addDays(state.date, -1)); renderLog(); });
-  $('date-next').addEventListener('click', function () { state.date = clampDate(addDays(state.date, 1)); renderLog(); });
-  $('date-input').addEventListener('change', function (e) { if (e.target.value) { state.date = clampDate(e.target.value); renderLog(); } });
+  $('month-prev').addEventListener('click', function () { state.month = clampMonth(shiftMonth(state.month, -1)); renderLog(); });
+  $('month-next').addEventListener('click', function () { state.month = clampMonth(shiftMonth(state.month, 1)); renderLog(); });
 
   // ---------- auth ----------
   function showCodeStep(email) {
@@ -325,6 +310,25 @@
 
   $('signout').addEventListener('click', async function () { await sb.auth.signOut(); });
 
+  // Deleting takes two taps so it can't happen by accident.
+  var armTimer;
+  $('delete-account').addEventListener('click', async function () {
+    var btn = $('delete-account');
+    if (!btn.classList.contains('armed')) {
+      btn.classList.add('armed'); btn.textContent = 'Tap again to permanently delete everything';
+      clearTimeout(armTimer);
+      armTimer = setTimeout(function () { btn.classList.remove('armed'); btn.textContent = 'Delete my account and data'; }, 6000);
+      return;
+    }
+    clearTimeout(armTimer); btn.disabled = true; setMsg('delete-msg', '');
+    var r = await sb.functions.invoke('delete-account', { body: {} });
+    btn.disabled = false; btn.classList.remove('armed'); btn.textContent = 'Delete my account and data';
+    if (r.error) { setMsg('delete-msg', 'Could not delete your account. Please try again.'); return; }
+    await sb.auth.signOut({ scope: 'local' });
+    try { localStorage.clear(); } catch (e) {}
+    toast('Your account and data were deleted.');
+  });
+
   // ---------- onboarding & settings ----------
   $('onboard-form').addEventListener('submit', async function (ev) {
     ev.preventDefault();
@@ -337,7 +341,7 @@
       }).select().single();
       if (r.error) throw r.error;
       state.profile = r.data;
-      await addEntry(ITEMS.join, clampDate(todayIso()));
+      await setCount(ITEMS.join, currentMonth(), 1);
       enterMain();
     } catch (err) { console.error(err); setMsg('onboard-msg', 'Could not save. Please try again.'); }
     btn.disabled = false;
@@ -364,7 +368,7 @@
   }
 
   function enterMain() {
-    state.date = clampDate(todayIso());
+    state.month = currentMonth();
     fillSettings(); show('main'); render(); checkMilestones();
   }
 
@@ -372,7 +376,7 @@
   var loadedFor = null;
   async function onSession(session) {
     if (!session) {
-      loadedFor = null; state.user = null; state.profile = null; state.entries = [];
+      loadedFor = null; state.user = null; state.profile = null; state.counts = {};
       show('auth');
       var pending = localStorage.getItem(PENDING_KEY);
       if (pending) showCodeStep(pending); else showEmailStep();
@@ -384,9 +388,9 @@
     try {
       var r = await sb.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
       if (r.error) throw r.error;
-      if (!r.data) { state.profile = null; state.entries = []; show('onboard'); return; }
+      if (!r.data) { state.profile = null; state.counts = {}; show('onboard'); return; }
       state.profile = r.data;
-      await loadEntries();
+      await loadCounts();
       enterMain();
     } catch (err) {
       console.error(err); loadedFor = null; show('auth');
@@ -396,11 +400,6 @@
   sb.auth.onAuthStateChange(function (event, session) {
     // Defer so we never call Supabase from inside the auth callback.
     setTimeout(function () { onSession(session); }, 0);
-  });
-
-  // Refresh "today" when the app comes back to the foreground on a new day.
-  document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && state.profile && state.date > maxDate()) { state.date = maxDate(); renderLog(); }
   });
 
   // ---------- install ----------
