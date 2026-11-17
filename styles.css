@@ -101,7 +101,7 @@ input.count::-webkit-outer-spin-button, input.count::-webkit-inner-spin-button {
 .check.on { background: var(--green); color: #fff; }
 .check:disabled { opacity: .6; }
 
-.milestones { display: grid; grid-template-columns: repeat(5, 1fr); gap: .4rem; }
+.milestones { display: grid; grid-template-columns: repeat(3, 1fr); gap: .45rem; }
 .ms { background: var(--card); border-radius: 14px; padding: .7rem .2rem; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,.07); }
 .ms .p { font-weight: 700; font-size: 1.05rem; color: var(--muted); }
 .ms .n { font-size: .68rem; color: var(--muted); }

@@ -18,8 +18,17 @@
     25: { e: '🔥', t: 'A quarter of the way!', b: "25% of your goal is behind you. These habits are starting to stick." },
     50: { e: '⭐', t: 'Halfway there!', b: "You've reached 50% of your goal. Look how far you've come." },
     75: { e: '💪', t: 'Three quarters done!', b: "75% of your goal. The finish line is in sight." },
-    100: { e: '🏆', t: 'You reached your goal!', b: "100%! Go celebrate with your admin team and collect your prize. You earned it." }
+    100: { e: '🏆', t: 'You reached your goal!', b: "100%! Go celebrate with your admin team and collect your prize. You earned it." },
+    3000: { e: '👑', t: '3,000 points!', b: "Three thousand points. That is an extraordinary amount of care for your body, mind, and spirit. Go celebrate with your admin team." }
   };
+  // Every milestone for this person, in the order they will be reached.
+  // Percent milestones depend on the personal goal; point milestones are fixed.
+  function milestones() {
+    var goal = state.profile.goal_points;
+    var list = C.milestones.map(function (m) { return { key: m, pts: Math.ceil(goal * m / 100), label: m + '%', name: m + '% milestone' }; });
+    (C.pointMilestones || []).forEach(function (n) { list.push({ key: n, pts: n, label: n.toLocaleString(), name: n.toLocaleString() + ' point milestone' }); });
+    return list.sort(function (a, b) { return a.pts - b.pts || a.key - b.key; });
+  }
 
   // ---------- helpers ----------
   function pad(n) { return n < 10 ? '0' + n : '' + n; }
@@ -96,8 +105,8 @@
   // ---------- milestones ----------
   async function checkMilestones() {
     var p = state.profile; if (!p) return;
-    var pct = total() / p.goal_points * 100;
-    var fresh = C.milestones.filter(function (m) { return pct >= m && p.celebrated.indexOf(m) === -1; });
+    var tot = total();
+    var fresh = milestones().filter(function (m) { return tot >= m.pts && p.celebrated.indexOf(m.key) === -1; }).map(function (m) { return m.key; });
     if (!fresh.length) return;
     var top = fresh[fresh.length - 1];
     p.celebrated = p.celebrated.concat(fresh);
@@ -146,10 +155,10 @@
     $('goal').textContent = p.goal_points;
     $('pct').textContent = pct;
     $('ring-fg').style.strokeDashoffset = (326.73 * (1 - Math.min(pct, 100) / 100)).toFixed(2);
-    var nextM = C.milestones.filter(function (m) { return pct < m; })[0];
+    var nextM = milestones().filter(function (m) { return tot < m.pts; })[0];
     $('next').textContent = nextM
-      ? plural(Math.max(1, Math.ceil(p.goal_points * nextM / 100 - tot)), 'point') + ' to your ' + nextM + '% milestone'
-      : 'Goal reached. Everything from here is a bonus!';
+      ? plural(nextM.pts - tot, 'point') + ' to your ' + nextM.name
+      : 'Every milestone reached. Everything from here is a bonus!';
     renderLog();
     renderProgress();
   }
@@ -231,13 +240,13 @@
   }
 
   function renderProgress() {
-    var p = state.profile, tot = total(), pct = tot / p.goal_points * 100;
+    var p = state.profile, tot = total();
     var ms = $('milestones'); ms.textContent = '';
-    C.milestones.forEach(function (m) {
-      var box = el('div', 'ms' + (pct >= m ? ' hit' : ''));
-      box.appendChild(el('div', 'e', MS_INFO[m].e));
-      box.appendChild(el('div', 'p', m + '%'));
-      box.appendChild(el('div', 'n', Math.ceil(p.goal_points * m / 100) + ' pts'));
+    milestones().forEach(function (m) {
+      var box = el('div', 'ms' + (tot >= m.pts ? ' hit' : ''));
+      box.appendChild(el('div', 'e', MS_INFO[m.key].e));
+      box.appendChild(el('div', 'p', m.label));
+      box.appendChild(el('div', 'n', m.key > 100 ? 'points' : m.pts.toLocaleString() + ' pts'));
       ms.appendChild(box);
     });
 
