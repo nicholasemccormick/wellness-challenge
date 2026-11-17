@@ -26,7 +26,11 @@
   function milestones() {
     var goal = state.profile.goal_points;
     var list = C.milestones.map(function (m) { return { key: m, pts: Math.ceil(goal * m / 100), label: m + '%', name: m + '% milestone' }; });
-    (C.pointMilestones || []).forEach(function (n) { list.push({ key: n, pts: n, label: n.toLocaleString(), name: n.toLocaleString() + ' point milestone' }); });
+    (C.pointMilestones || []).forEach(function (n) {
+      // When the personal goal is itself 3,000, the 100% milestone already covers it.
+      if (list.some(function (m) { return m.pts === n; })) return;
+      list.push({ key: n, pts: n, label: n.toLocaleString(), name: n.toLocaleString() + ' point milestone' });
+    });
     return list.sort(function (a, b) { return a.pts - b.pts || a.key - b.key; });
   }
 
@@ -359,7 +363,7 @@
   $('settings-form').addEventListener('submit', async function (ev) {
     ev.preventDefault();
     setMsg('settings-msg', '');
-    var goal = Math.max(50, Math.min(5000, parseInt($('st-goal').value, 10) || 500));
+    var goal = Math.max(50, Math.min(3000, parseInt($('st-goal').value, 10) || 500));
     var carry = Math.max(0, Math.min(5000, parseInt($('st-carry').value, 10) || 0));
     var r = await sb.from('profiles').update({ display_name: $('st-name').value.trim(), goal_points: goal, carryover_points: carry })
       .eq('id', state.user.id).select().single();
