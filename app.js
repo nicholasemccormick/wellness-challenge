@@ -18,18 +18,24 @@
     25: { e: '🔥', t: 'A quarter of the way!', b: "25% of your goal is behind you. These habits are starting to stick." },
     50: { e: '⭐', t: 'Halfway there!', b: "You've reached 50% of your goal. Look how far you've come." },
     75: { e: '💪', t: 'Three quarters done!', b: "75% of your goal. The finish line is in sight." },
-    100: { e: '🏆', t: 'You reached your goal!', b: "100%! Go celebrate with your admin team and collect your prize. You earned it." },
+    100: { e: '🏆', t: 'You reached your goal!', b: "100%! Go celebrate with your admin team and collect your prize. You earned it." }
+  };
+  // Celebrations for the fixed point milestones.
+  var PT_INFO = {
+    100: { e: '💯', t: '100 points!', b: "Your first hundred points. Every one of them was a choice to take care of yourself. Keep it going." },
     3000: { e: '👑', t: '3,000 points!', b: "Three thousand points. That is an extraordinary amount of care for your body, mind, and spirit. Go celebrate with your admin team." }
   };
+  // Point milestones are remembered under their own keys so "100 points" never collides with "100%".
+  var PT_KEY = 100000;
   // Every milestone for this person, in the order they will be reached.
   // Percent milestones depend on the personal goal; point milestones are fixed.
   function milestones() {
     var goal = state.profile.goal_points;
-    var list = C.milestones.map(function (m) { return { key: m, pts: Math.ceil(goal * m / 100), label: m + '%', name: m + '% milestone' }; });
+    var list = C.milestones.map(function (m) { return { key: m, pts: Math.ceil(goal * m / 100), label: m + '%', name: m + '% milestone', info: MS_INFO[m] }; });
     (C.pointMilestones || []).forEach(function (n) {
-      // When the personal goal is itself 3,000, the 100% milestone already covers it.
-      if (list.some(function (m) { return m.pts === n; })) return;
-      list.push({ key: n, pts: n, label: n.toLocaleString(), name: n.toLocaleString() + ' point milestone' });
+      // If the personal goal is exactly this number, reaching the goal already covers it.
+      if (list.some(function (m) { return m.pts === n && m.key === 100; })) return;
+      list.push({ key: PT_KEY + n, pts: n, fixed: true, label: n.toLocaleString(), name: n.toLocaleString() + ' point milestone', info: PT_INFO[n] });
     });
     return list.sort(function (a, b) { return a.pts - b.pts || a.key - b.key; });
   }
@@ -110,18 +116,16 @@
   async function checkMilestones() {
     var p = state.profile; if (!p) return;
     var tot = total();
-    var fresh = milestones().filter(function (m) { return tot >= m.pts && p.celebrated.indexOf(m.key) === -1; }).map(function (m) { return m.key; });
+    var fresh = milestones().filter(function (m) { return tot >= m.pts && p.celebrated.indexOf(m.key) === -1; });
     if (!fresh.length) return;
-    var top = fresh[fresh.length - 1];
-    p.celebrated = p.celebrated.concat(fresh);
-    celebrate(top);
+    p.celebrated = p.celebrated.concat(fresh.map(function (m) { return m.key; }));
+    celebrate(fresh[fresh.length - 1].info);
     var r = await sb.from('profiles').update({ celebrated: p.celebrated }).eq('id', state.user.id);
     if (r.error) console.error(r.error);
   }
 
   var confettiRaf;
-  function celebrate(m) {
-    var info = MS_INFO[m];
+  function celebrate(info) {
     $('cel-emoji').textContent = info.e;
     $('cel-title').textContent = info.t;
     $('cel-body').textContent = info.b;
@@ -248,9 +252,9 @@
     var ms = $('milestones'); ms.textContent = '';
     milestones().forEach(function (m) {
       var box = el('div', 'ms' + (tot >= m.pts ? ' hit' : ''));
-      box.appendChild(el('div', 'e', MS_INFO[m.key].e));
+      box.appendChild(el('div', 'e', m.info.e));
       box.appendChild(el('div', 'p', m.label));
-      box.appendChild(el('div', 'n', m.key > 100 ? 'points' : m.pts.toLocaleString() + ' pts'));
+      box.appendChild(el('div', 'n', m.fixed ? 'points' : m.pts.toLocaleString() + ' pts'));
       ms.appendChild(box);
     });
 

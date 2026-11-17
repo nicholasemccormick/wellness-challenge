@@ -8,7 +8,7 @@ window.CHALLENGE = {
   end: '2027-04-30',
   milestones: [10, 25, 50, 75, 100],
   // Fixed milestones in points, the same for everyone regardless of personal goal.
-  pointMilestones: [3000],
+  pointMilestones: [100, 3000],
   // Same order as the columns on the original sheet, left to right.
   categories: [
     { id: 'onetime', name: 'One Time' },
